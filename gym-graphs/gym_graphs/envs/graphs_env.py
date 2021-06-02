@@ -1,58 +1,18 @@
-import numpy as np
+from .graph_util import *
 
-from gym import Env, spaces
+import numpy as np
+import gym
+
+from gym import error, spaces, utils
 from gym.utils import seeding
 
-class Node:
-    def __init__(self, ID, owner, units, neighbors):
-        self.id = ID
-        self.owner = owner
-        self.units = units
-        self.neighbors = neighbors
-
-    def get_observation(self):
-        return (self.owner, self.units, self.neighbors)
-
-
-class Grid:
-    def generate_edge_dict(N):
-        for i in range(N):
-            for j in range(N):
-                ID = i*N + j
-                
-
-    def init_grid(N, init_amts):
-        edge_dict = {}
-        nodes = []
-        for i in range(N):
-            for j in range(N):
-                ID = i * N + j
-                edge_dict[ID] = set()
-                if i != 0:
-                    edge_dict[ID].add((i - 1) * N + j)
-                if j != 0:
-                    edge_dict[ID].add((i * N + j - 1)
-                if i != N - 1:
-                    edge_dict[ID].add((i + 1) * N + j)
-                if j != N - 1: 
-                    edge_dict[ID].add(i * N + j + 1)
-                neighbors = [0] * N
-                for x in edge_dict[ID]:
-                    neighbors[x] = 1
-                
-                nodes.append(Node(2, init_amts[ID], tuple(neighbors)))
-        
-        nodes[0].owner = 0
-        nodes[-1].owner = 1
-        
-        return nodes, edge_dict
 
 class AI:
     def move(N):
-        return spaces.MultiDiscrete([N, N]).sample()
+        return spaces.MultiDiscrete([N*N, N*N]).sample()
 
 
-class GraphGameEnv(Env):
+class GraphsEnv(gym.Env):
 
     """
     Description:
@@ -78,17 +38,16 @@ class GraphGameEnv(Env):
     }
 
     def __init__(self):
-        self.N = 10
-        self.MAX_U = 100
+        self.N = 3
         self.players = 2
         self.neutral_l = 10
         self.neutral_h = 20
         self.start_units = 10
-        self.action_space = spaces.MultiDiscrete([self.N, self.N])
+        self.action_space = spaces.MultiDiscrete([self.N * self.N, self.N * self.N])
         self.observation_space = spaces.Tuple(
             tuple([spaces.Tuple(
-                (spaces.Discrete(self.players + 1), spaces.Discrete(self.MAX_U), spaces.MultiBinary(self.N)))
-                ] * self.N))
+                (spaces.Discrete(self.players + 1), spaces.Box(low=0, high=64000, shape=(1,), dtype=np.uint16), spaces.MultiBinary(self.N * self.N)))
+                ] * (self.N * self.N)))
         self.seed()
         self.nodes = None
         self.edges = None
@@ -98,10 +57,10 @@ class GraphGameEnv(Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def perform_action(action, player):
+    def perform_action(self, action, player):
         source = self.nodes[action[0]]
         target = self.nodes[action[1]]
-        if source.owner == player and action[1] in self.edge_dict[action[0]]:
+        if source.owner == player and action[1] in self.edges[action[0]]:
             if target.owner == player:
                 target.units += source.units
             else:
@@ -109,52 +68,41 @@ class GraphGameEnv(Env):
                 if target.units < 0:
                     target.owner = player
                     target.units *= -1
+            source.units = 0
             
 
     def step(self, action):
         err_msg = "%r (%s) invalid" % (action, type(action))
         assert self.action_space.contains(action), err_msg
 
-        perform_action(action, 0)
-        for i in range(1, players)
-            perform_action(AI.move(self.N), i)
+        self.perform_action(action, 0)
+        for i in range(1, self.players):
+            self.perform_action(AI.move(self.N), i)
         
-        counts = {}
-
+        players_left = set()
         for x in self.nodes:
-            if x.owner != players /
+            if x.owner != self.players: # not neutral
                 x.units += 1
-            
+                players_left.add(x.owner)
         
-        obs = tuple([x.get_observation for x in self.nodes])
+        done = len(players_left) == 1    
+        obs = tuple([x.get_observation() for x in self.nodes])
+        reward = 1.0 if done and 0 in players_left else 0.0
 
+        return obs, reward, done, {}
 
-
-
-        
-
-
-    
     def reset(self):
         node_vals = [self.np_random.randint(self.neutral_l, self.neutral_h + 1) for _ in range(self.N * self.N)]
         node_vals[0] = self.start_units
         node_vals[-1] = self.start_units
         self.nodes, self.edges = Grid.init_grid(self.N, node_vals)
-        return tuple([x.get_observation for x in self.nodes])
+        return tuple([x.get_observation() for x in self.nodes])
         
     def render(self, mode='human'):
         for x in self.nodes:
-            print(f"| {x.owner}, {x.units} |")
-            if (x.id % self.N) = self.N - 1:
+            print(f"| {x.owner}, {x.units} |", end="")
+            if (x.id % self.N) == self.N - 1:
                 print("\n")
     
     def close(self):
         pass
-
-
-    
-
-
-
-        
-    
