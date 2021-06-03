@@ -1,7 +1,7 @@
 import gym
 import gym_graphs
 
-env = gym.make('graphs-f-v0', N=5)
+env = gym.make('graphs-r-v0', N=5)
 env.seed()
 obs = env.reset()
 env.render(mode='console')
@@ -21,7 +21,7 @@ while not done:
     total_reward += reward
     rounds += 1
 
-    # env.render(mode='console')
+    env.render(mode='console')
 
 print(total_reward)
 print(rounds)

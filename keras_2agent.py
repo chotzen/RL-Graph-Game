@@ -5,8 +5,8 @@ import numpy as np
 import gym
 import gym_graphs
 
-import wandb
-from wandb.keras import WandbCallback
+# import wandb
+# from wandb.keras import WandbCallback
 
 from keras.models import Sequential
 from keras.layers import Dense, Activation, Flatten, Convolution2D, Permute
@@ -39,7 +39,7 @@ class GraphProcessor(Processor):
     def process_state_batch(self, batch):
         return np.squeeze(batch, axis=1)
 
-wandb.init(project="graph-rl")
+# wandb.init(project="graph-rl")
         
 parser = argparse.ArgumentParser()
 parser.add_argument('--n', type=int, default=5)
@@ -48,7 +48,7 @@ parser.add_argument('--weights', type=str, default=None)
 parser.add_argument('--env-name', type=str, default='1')
 args = parser.parse_args()
 
-env = gym.make('graphs-f-v0', N=args.n, mode='random', reward_weights=(1000, 0)) # TODO: add more parameters here so we can grid search
+env = gym.make('graphs-r-v0', N=args.n, mode='random', reward_weights=(1000, 0)) # TODO: add more parameters here so we can grid search
 env.seed()
 obs = env.reset()
 env.render(mode='console')
@@ -56,7 +56,7 @@ env.render(mode='console')
 C1 = 20
 C2 = 40
 C3 = 40
-D = 1500
+D = 200
 
 '''
 outline of how this is going to work:
@@ -68,7 +68,7 @@ outline of how this is going to work:
 
 model = Sequential()
 model.add(Dense(D, input_shape=(args.n, args.n, 3)))
-# model.add(Convolution2D(C1, (1, 1), input_shape=(args.n, args.n, 3)))
+# model.add(Convolution2D(C1, (2, 2), input_shape=(args.n, args.n, 3)))
 model.add(Activation('relu'))
 model.add(Flatten())
 model.add(Dense(D))
@@ -85,7 +85,7 @@ processor = GraphProcessor()
 policy = EpsGreedyQPolicy() # tinker with this
 
 dqn = DQNAgent(model=model, nb_actions=env.action_space.n, policy=policy, memory=EpisodeParameterMemory(100000, window_length=1),
-            processor=processor, nb_steps_warmup=150000, gamma=.99, target_model_update=10000,
+            processor=processor, nb_steps_warmup=150000, gamma=.95, target_model_update=10000,
             train_interval=4, delta_clip=1.)
 
 dqn.compile(Adam(lr=.00025), metrics=['mae']) # also tinker with learning rate here
@@ -97,7 +97,7 @@ if args.mode == 'train':
     checkpoint_weights_filename = 'dqn_' + args.env_name + '_weights_{step}.h5f'
     log_filename = 'dqn_{}_log.json'.format(args.env_name)
     callbacks = [ModelIntervalCheckpoint(checkpoint_weights_filename, interval=250000)]
-    callbacks += [FileLogger(log_filename, interval=100), WandbCallback()]
+    callbacks += [FileLogger(log_filename, interval=100)]
     dqn.fit(env, callbacks=callbacks, nb_steps=100000, log_interval=10000)
 
     # After training is done, we save the final weights one more time.

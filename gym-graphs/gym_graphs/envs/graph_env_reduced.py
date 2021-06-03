@@ -6,12 +6,6 @@ import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
 
-
-class AI:
-    def move(N):
-        return spaces.MultiDiscrete([N*N, N*N]).sample()
-
-
 class GraphEnvR(gym.Env):
 
     """
@@ -86,6 +80,9 @@ class GraphEnvR(gym.Env):
         # left
         elif direction == 3 and (source_idx - 1) % self.N != self.N - 1:
             target_idx = source_idx - 1
+        else:
+            target_idx = source_idx
+
 
             
         source = self.nodes[source_idx]
@@ -136,6 +133,8 @@ class GraphEnvR(gym.Env):
         while not self.action_is_useful(action2, 1):
             action2 = self.action_space.sample()
 
+        # model.predict from a module
+
         self.perform_action(action, 0)
         self.perform_action(action2, 1)
 
@@ -178,6 +177,7 @@ class GraphEnvR(gym.Env):
             print(f"| {x.owner}, {x.units} |", end="")
             if (x.id % self.N) == self.N - 1:
                 print("\n")
+        print("-------------------")
     
     def close(self):
         pass

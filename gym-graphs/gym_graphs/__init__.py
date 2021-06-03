@@ -14,3 +14,8 @@ register(
     id='graphs-f-v0',
     entry_point='gym_graphs.envs:GraphEnvF',
 )
+
+register(
+    id='graphs-r-v0',
+    entry_point='gym_graphs.envs:GraphEnvR',
+)
