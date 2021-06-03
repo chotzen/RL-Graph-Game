@@ -14,11 +14,26 @@ from tqdm import tqdm
 EPISODES = 1000
 batch_size = 32
 
+class GraphProcessor():
+    def process_observation(observation):
+        # print(len(observation))
+        '''
+        Converts the observation to an (N*N*3,) numpy array
+        '''
+        N = int(np.sqrt(len(observation)))
+        assert N*N == len(observation)
+
+        result = np.zeros((N, N, 3))
+        for i, (owner, n_units, _) in enumerate(list(observation)):
+            result[i // N, i % N, owner] = n_units
+
+        return result.astype('uint16').flatten()
+
 class DQNAgent:
     def __init__(self, state_size, action_size):
         self.state_size = state_size
         self.action_size = action_size
-        self.memory = deque(maxlen=2000)
+        self.memory = deque(maxlen=10000)
         self.gamma = 0.95    # discount rate
         self.epsilon = 1.0  # exploration rate
         self.epsilon_min = 0.01
@@ -29,8 +44,9 @@ class DQNAgent:
     def _build_model(self):
         # Neural Net for Deep-Q learning Model
         model = Sequential()
-        model.add(Dense(24, input_dim=self.state_size, activation='relu'))
-        model.add(Dense(24, activation='relu'))
+        model.add(Dense(60, input_dim=self.state_size, activation='relu'))
+        model.add(Dense(60, activation='relu'))
+        model.add(Dense(60, activation='relu'))
         model.add(Dense(self.action_size, activation='linear'))
         model.compile(loss='mse',
                       optimizer=Adam(learning_rate=self.learning_rate))
@@ -66,27 +82,28 @@ class DQNAgent:
 
 
 if __name__ == "__main__":
-    env = gym.make('CartPole-v1')
-    state_size = env.observation_space.shape[0]
+    env = gym.make('gym_graphs:graphs-v0')
+    example_obs = GraphProcessor.process_observation(env.observation_space.sample())
+    state_size = np.shape(example_obs)[0]
     action_size = env.action_space.n
     agent = DQNAgent(state_size, action_size)
-    # agent.load("./save/cartpole-dqn.h5")
+    # agent.load("./save/graphs-dqn.h5")
     done = False
-
     for e in range(EPISODES):
-        state = env.reset()
+        state = GraphProcessor.process_observation(env.reset())
         state = np.reshape(state, [1, state_size])
+        tot_reward = 0
         for time in range(500):
             # env.render()
             action = agent.act(state)
             next_state, reward, done, _ = env.step(action)
-            reward = reward if not done else -10
-            next_state = np.reshape(next_state, [1, state_size])
+            next_state = np.reshape(GraphProcessor.process_observation(next_state), [1, state_size])
             agent.memorize(state, action, reward, next_state, done)
             state = next_state
+            tot_reward += reward
             if done:
                 print("episode: {}/{}, score: {}, e: {:.2}"
-                      .format(e, EPISODES, time, agent.epsilon))
+                      .format(e, EPISODES, tot_reward, agent.epsilon))
                 break
         if len(agent.memory) > batch_size:
             agent.replay(batch_size)

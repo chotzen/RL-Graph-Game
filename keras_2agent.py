@@ -1,3 +1,6 @@
+import os # turn off GPU
+os.environ["CUDA_DEVICE_ORDER"] = "PCI_BUS_ID"
+os.environ["CUDA_VISIBLE_DEVICES"] = ""
 import argparse
 from gym.core import ObservationWrapper
 import numpy as np

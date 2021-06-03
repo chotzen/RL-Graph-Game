@@ -12,12 +12,6 @@ class Node:
 
 
 class Grid:
-    def generate_edge_dict(N):
-        for i in range(N):
-            for j in range(N):
-                ID = i*N + j
-                
-
     def init_grid(N, init_amts):
         edge_dict = {}
         nodes = []
@@ -44,3 +38,19 @@ class Grid:
         nodes[-1].owner = 1
         
         return nodes, edge_dict
+    
+    def get_action_IDs(action, N):
+        sourceid = int(action / 4)
+        direction = action % 4
+        targetid = -1
+
+        if direction == 0:
+            targetid = sourceid - N
+        elif direction == 1:
+            targetid = sourceid - 1
+        elif direction == 2:
+            targetid = sourceid + N
+        else:
+            targetid = sourceid + 1
+        
+        return sourceid, targetid

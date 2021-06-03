@@ -9,7 +9,7 @@ from gym.utils import seeding
 
 class AI:
     def move(N):
-        return spaces.MultiDiscrete([N*N, N*N]).sample()
+        return spaces.Discrete(N*N*4).sample()
 
 
 class GraphsEnv(gym.Env):
@@ -21,6 +21,7 @@ class GraphsEnv(gym.Env):
         see http://generals.io for inspiration
     Observation:
         Tuple (MultiDiscrete[3, 3, 3, ... (n times)], MultiDiscrete[MAX_TROOP, MT, MT, MT, ... (n times)], MultiBinary[n, n] (edges T/F))
+        First describes owner: 1 = agent, 2 = ai, 3 = neutral.
     Actions:
         Type: MultiDiscrete[n, n]
     Reward:
@@ -37,17 +38,14 @@ class GraphsEnv(gym.Env):
         'render.modes': ['human']
     }
 
-    def __init__(self, N, mode='random', model=None):
-        self.N = N
+    def __init__(self):
+        self.N = 3
+        self.max_degree = 4
         self.players = 2
         self.neutral_l = 10
         self.neutral_h = 20
         self.start_units = 10
-        self.clock = 0
-        self.growth_rate = 5
-        self.mode = mode
-        self.model = model
-        self.action_space = spaces.MultiDiscrete([self.N * self.N, self.N * self.N])
+        self.action_space = spaces.Discrete(self.N * self.N * self.max_degree)
         self.observation_space = spaces.Tuple(
             tuple([spaces.Tuple(
                 (spaces.Discrete(self.players + 1), spaces.Box(low=0, high=64000, shape=(1,), dtype=np.uint16), spaces.MultiBinary(self.N * self.N)))
@@ -61,10 +59,16 @@ class GraphsEnv(gym.Env):
         self.np_random, seed = seeding.np_random(seed)
         return [seed]
 
-    def perform_action(self, action, player):
-        source = self.nodes[action[0]]
-        target = self.nodes[action[1]]
-        if source.owner == player and action[1] in self.edges[action[0]]:
+    def perform_action(self, action, player): # returns boolean on valididty of action
+        sourceid, targetid = Grid.get_action_IDs(action, self.N)
+
+        if targetid < 0 or targetid >= len(self.nodes):
+            return False
+
+        source = self.nodes[sourceid]
+        target = self.nodes[targetid]
+
+        if source.owner == player and target.id in self.edges[source.id]:
             if target.owner == player:
                 target.units += source.units
             else:
@@ -73,58 +77,37 @@ class GraphsEnv(gym.Env):
                     target.owner = player
                     target.units *= -1
             source.units = 0
-            
-    def action_is_useful(self, action, player):
-        '''
-        Checks that the action given in the argument will actually do something. Useful for having 
-        things actually happen if we're random sampling
-        '''
-        source = self.nodes[action[0]]
-        target = self.nodes[action[1]]
-        return source.owner == player and action[1] in self.edges[action[0]]
+            return True
 
-    def flip_observation(self, obs, p1, p2):
-        owner, units, nbs = obs 
-        if owner == p2:
-            return (p1, units, nbs)
-        elif owner == p1:
-            return (p2, units, nbs)
-        return obs
+        return False
+            
 
     def step(self, action):
         err_msg = "%r (%s) invalid" % (action, type(action))
-        print(action)
         assert self.action_space.contains(action), err_msg
 
-        self.perform_action(action, 0)
-        # if self.mode == 'random':
-        action2 = self.action_space.sample()
-        while not self.action_is_useful(action2, 1):
-            action2 = self.action_space.sample()
-
-        # TODO: add support for sampling from trained models, here. 
+        valid_act = self.perform_action(action, 0)
+        
+        self.perform_action(AI.move(self.N), 1)
         
         players_left = set()
         for x in self.nodes:
             if x.owner != self.players: # not neutral
-                if self.clock % self.growth_rate == 0:
-                    x.units += 1 
+                x.units += 1
                 players_left.add(x.owner)
         
         done = len(players_left) == 1    
         obs = tuple([x.get_observation() for x in self.nodes])
-        # other_obs = tuple([self.flip_observation(x.get_observation(), 0,1) for x in self.nodes])
-        if done:
-            if 1 in players_left:
-                reward = -1
-            else:
-                reward = 1
+        if done and 0 in players_left:
+            reward = 100
+        elif done and 1 in players_left:
+            reward = -50
+        elif not valid_act:
+            reward = -1 # penalize invalid play
         else:
-            reward = 0
+            reward = 0 # survival is nice
 
-        self.clock += 1
-
-        return obs, reward, done, {}
+        return obs, reward, done, 0
 
     def reset(self):
         node_vals = [self.np_random.randint(self.neutral_l, self.neutral_h + 1) for _ in range(self.N * self.N)]
@@ -134,34 +117,11 @@ class GraphsEnv(gym.Env):
         return tuple([x.get_observation() for x in self.nodes])
         
     def render(self, mode='human'):
-        # viewer = SimpleImageViewer()
-        viewer = rendering.Viewer(500,500)
         for x in self.nodes:
             print(f"| {x.owner}, {x.units} |", end="")
             if (x.id % self.N) == self.N - 1:
                 print("\n")
-        if mode == 'graphic':
-            heatMap = np.zeros()
-            for x in self.nodes:
-                heatmap[x.get_observation()[0]][x.get_observation()[1]][0] = x.units
-            colors = [[Color(heatmap[i,j,:] for j in range(self.N))] for i in range(self.N)]
-            viewer.imshow(colors)
-            # viewer.close()
-
-        
-        elif mode == 'console':
-            for x in self.nodes:
-                print(f"| {x.owner}, {x.units} |", end="")
-                if (x.id % self.N) == self.N - 1:
-                    print("\n")
-            
-            heatMap = np.zeros()
-            for x in self.nodes:
-                heatmap[x.get_observation()[0]][x.get_observation()[1]][0] = x.units
-            colors = [[Color(heatmap[i,j,:] for j in range(self.N))] for i in range(self.N)]
-            viewer.imshow(colors)
-            # viewer.close()
-            return viewer.render(return_rgb_array = mode=='rgb_array')
+        print("--------------------------")
     
     def close(self):
         pass
