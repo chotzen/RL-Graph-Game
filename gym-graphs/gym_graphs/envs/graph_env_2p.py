@@ -33,11 +33,14 @@ class GraphEnv2P(Env):
     }
 
     def __init__(self, N):
+        self.viewer = None
         self.N = N
         self.players = 2
         self.neutral_l = 10
         self.neutral_h = 20
         self.start_units = 10
+        self.clock = 0
+        self.growth_rate = 5 
         self.action_space = spaces.MultiDiscrete([self.N * self.N, self.N * self.N])
         self.observation_space = spaces.Tuple(
             tuple([spaces.Tuple(
@@ -76,8 +79,12 @@ class GraphEnv2P(Env):
             source.units = 0
 
     def flip_observation(self, obs, p1, p2):
-        owner, units, nbs = obs
-
+        owner, units, nbs = obs 
+        if owner == p2:
+            return (p1, units, nbs)
+        elif owner == p1:
+            return (p2, units, nbs)
+        return obs
             
 
     def step(self, action1, action2):
@@ -96,13 +103,22 @@ class GraphEnv2P(Env):
         players_left = set()
         for x in self.nodes:
             if x.owner != self.players: # not neutral
-                x.units += 1
+                if self.clock % self.growth_rate == 0:
+                    x.units += 1
                 players_left.add(x.owner)
 
         done = len(players_left) == 1    
         obs = tuple([x.get_observation() for x in self.nodes])
-        other_obs = tuple([Node.flip_observation(x.get_observation()) for x in self.nodes])
-        reward = 1.0 if done and 0 in players_left else 0.0
+        other_obs = tuple([self.flip_observation(x.get_observation(), 0,1) for x in self.nodes])
+        if done:
+            if 1 in players_left:
+                reward = -1
+            else:
+                reward = 1
+        else:
+            reward = 0
+
+        self.clock += 1
 
         return obs, reward, done, {'other_obs': other_obs}
 
@@ -111,22 +127,26 @@ class GraphEnv2P(Env):
         node_vals[0] = self.start_units
         node_vals[-1] = self.start_units
         self.nodes, self.edges = Grid.init_grid(self.N, node_vals)
-        print(self.edges)
+        # print(self.edges)
         return tuple([x.get_observation() for x in self.nodes])
         
     def render(self, mode='console'):
         #here
-        if mode == 'graphic':
-            heatMap = np.zeros()
-            for x in self.nodes:
-                heatmap[x.observation_space[0]][x.observation_space[1]][0] = x.units
-                
-        
-        elif mode == 'console':
+        if mode == 'console':
             for x in self.nodes:
                 print(f"| {x.owner}, {x.units} |", end="")
                 if (x.id % self.N) == self.N - 1:
                     print("\n")
+        return
+        if mode == 'graphic':
+            heatMap = np.zeros()
+            for x in self.nodes:
+                heatmap[x.observation_space[0]][x.observation_space[1]][0] = x.units
+        if self.viewer is None:
+            self.viewer = rendering.Viewer(500,500)
+            bound = N
+            self.viewer.set_bounds(-bound,bound,-bound,bound)
+        
     
     def close(self):
         pass
